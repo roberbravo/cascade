@@ -1,0 +1,16 @@
+server:
+  serviceType: ClusterIP
+  secure: false
+  authModes:
+    - server
+
+persistence:
+  enabled: true
+  size: 10Gi
+
+controller:
+  workflowNamespaces:
+    - argo
+
+images:
+  tag: v4.0.3

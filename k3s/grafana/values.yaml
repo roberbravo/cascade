@@ -1,0 +1,24 @@
+adminPassword: cascade123
+
+persistence:
+  enabled: true
+  size: 2Gi
+
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+    - name: PostgreSQL
+      type: postgres
+      access: proxy
+      url: postgres-postgresql.postgres.svc.cluster.local:5432
+      database: cascade_db
+      user: cascade
+      secureJsonData:
+        password: cascade123
+      isDefault: true
+      editable: true
+
+service:
+  type: ClusterIP
+  port: 3000

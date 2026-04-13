@@ -1,0 +1,162 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata:
+  name: cascade-pipeline
+  namespace: argo
+spec:
+  serviceAccountName: argo-workflow-sa
+  entrypoint: cascade
+  arguments:
+    parameters:
+    - name: dataset-url
+      value: "https://www.kaggle.com/api/v1/datasets/download/abdulmaliklodhra/global-fuel-prices-analysis-and-2026-forecasting"
+    - name: dataset-file
+      value: "fuel_prices_1970_2026.csv"
+  
+  volumeClaimTemplates:
+  - metadata:
+      name: workdir
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 2Gi
+  
+  volumes:
+  - name: scripts
+    configMap:
+      name: cascade-scripts
+  
+  templates:
+  - name: cascade
+    steps:
+    - - name: download
+        template: download-step
+        arguments:
+          parameters:
+          - name: url
+            value: "{{workflow.parameters.dataset-url}}"
+    
+    - - name: prepare
+        template: python-step
+        arguments:
+          parameters:
+          - name: script
+            value: "prep.py"
+          - name: input
+            value: "{{workflow.parameters.dataset-file}}"
+          - name: output
+            value: "prepared.csv"
+    
+    - - name: process
+        template: python-step
+        arguments:
+          parameters:
+          - name: script
+            value: "process.py"
+          - name: input
+            value: "prepared.csv"
+          - name: output
+            value: "processed.csv"
+    
+    - - name: postprocess
+        template: python-step
+        arguments:
+          parameters:
+          - name: script
+            value: "postproc.py"
+          - name: input
+            value: "processed.csv"
+          - name: output
+            value: "results.json"
+    
+    - - name: save-to-postgres
+        template: save-postgres-step
+    
+    - - name: summary
+        template: show-summary
+  
+  - name: download-step
+    inputs:
+      parameters:
+      - name: url
+    container:
+      image: curlimages/curl:latest
+      command: [sh, -c]
+      args:
+        - |
+          cd /workdir
+          echo "📥 Descargando dataset..."
+          curl -L -o fuel.zip "{{inputs.parameters.url}}"
+          echo "📂 Extrayendo archivo..."
+          unzip -o fuel.zip
+          ls -lh
+      volumeMounts:
+      - name: workdir
+        mountPath: /workdir
+  
+  - name: python-step
+    inputs:
+      parameters:
+      - name: script
+      - name: input
+      - name: output
+    container:
+      image: python:3.11-slim
+      command: [sh, -c]
+      args:
+        - |
+          cd /workdir
+          pip install pandas numpy -q
+          echo "⚙️  Ejecutando {{inputs.parameters.script}}..."
+          python /scripts/{{inputs.parameters.script}} \
+            --input {{inputs.parameters.input}} \
+            --output {{inputs.parameters.output}}
+          echo "✓ {{inputs.parameters.script}} completado"
+      volumeMounts:
+      - name: workdir
+        mountPath: /workdir
+      - name: scripts
+        mountPath: /scripts
+  
+  - name: save-postgres-step
+    container:
+      image: python:3.11-slim
+      command: [sh, -c]
+      args:
+        - |
+          cd /workdir
+          pip install psycopg2-binary -q
+          echo "💾 Guardando en PostgreSQL..."
+          python /scripts/save-to-postgres.py \
+            --json-file results.json \
+            --db-host postgres-postgresql.postgres.svc.cluster.local \
+            --db-user cascade \
+            --db-password cascade123 \
+            --db-name cascade_db
+          echo "✓ Datos guardados en PostgreSQL"
+      volumeMounts:
+      - name: workdir
+        mountPath: /workdir
+      - name: scripts
+        mountPath: /scripts
+  
+  - name: show-summary
+    container:
+      image: alpine:latest
+      command: [sh, -c]
+      args:
+        - |
+          echo "=========================================="
+          echo "✓ PIPELINE CASCADE COMPLETADO"
+          echo "=========================================="
+          echo "Pasos ejecutados:"
+          echo "  1. ✓ Descarga de dataset"
+          echo "  2. ✓ Preparación de datos"
+          echo "  3. ✓ Procesamiento"
+          echo "  4. ✓ Postprocesamiento"
+          echo "  5. ✓ Guardado en PostgreSQL"
+          echo "=========================================="
+      volumeMounts:
+      - name: workdir
+        mountPath: /workdir

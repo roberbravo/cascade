@@ -1,0 +1,4 @@
+# Después de leer los archivos, añade:
+print(f"✓ prep_content length: {len(prep_content)}")
+print(f"✓ process_content length: {len(process_content)}")
+print(f"✓ postproc_content length: {len(postproc_content)}")
