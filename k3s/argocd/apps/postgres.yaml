@@ -8,7 +8,7 @@ spec:
   source:
     repoURL: https://charts.bitnami.com/bitnami
     chart: postgresql
-    targetRevision: 16.4.3
+    targetRevision: 18.5.21
     helm:
       valueFiles:
         - https://raw.githubusercontent.com/roberbravo/cascade/app-of-apps/k3s/postgres/values.yaml
