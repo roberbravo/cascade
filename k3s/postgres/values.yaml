@@ -7,17 +7,16 @@ primary:
   persistence:
     enabled: true
     size: 5Gi
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 500m
+    requests:
+      memory: 256Mi
+      cpu: 250m
 
 replica:
   replicaCount: 0
 
 metrics:
   enabled: false
-
-resources:
-  limits:
-    memory: 512Mi
-    cpu: 500m
-  requests:
-    memory: 256Mi
-    cpu: 250m
