@@ -6,12 +6,9 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://charts.bitnami.com/bitnami
-    chart: postgresql
-    targetRevision: 18.5.21
-    helm:
-      valueFiles:
-        - https://raw.githubusercontent.com/roberbravo/cascade/app-of-apps/k3s/postgres/values.yaml
+    repoURL: https://github.com/roberbravo/cascade
+    targetRevision: app-of-apps
+    path: k3s/postgres
   destination:
     server: https://kubernetes.default.svc
     namespace: postgres
@@ -21,4 +18,3 @@ spec:
       selfHeal: true
     syncOptions:
       - CreateNamespace=true
-
