@@ -11,7 +11,7 @@ spec:
     targetRevision: 0.45.3
     helm:
       valueFiles:
-        - https://raw.githubusercontent.com/roberbravo/cascade/containerize-flask/k3s/argo/values.yaml
+        - https://raw.githubusercontent.com/roberbravo/cascade/app-of-apps/k3s/argo/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: argo
