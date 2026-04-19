@@ -1,5 +1,6 @@
 server:
-  serviceType: ClusterIP
+  serviceType: NodePort
+  serviceNodePort: 30800
   secure: false
   authModes:
     - server
