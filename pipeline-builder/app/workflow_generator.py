@@ -1,36 +1,31 @@
 import yaml
-import json
 from datetime import datetime
-import base64
 
 class WorkflowGenerator:
-    def __init__(self, workflow_name, dataset_url, dataset_file, 
-                 prep_script_b64=None, process_script_b64=None, postproc_script_b64=None):
+    def __init__(self, workflow_name, dataset_url, dataset_file, steps):
         self.workflow_name = workflow_name
         self.dataset_url = dataset_url
         self.dataset_file = dataset_file
-        self.prep_script_b64 = prep_script_b64
-        self.process_script_b64 = process_script_b64
-        self.postproc_script_b64 = postproc_script_b64
-        self.steps = []
+        self.steps = steps  # lista de {name, script_b64, script_filename}
         self.save_postgres = False
-    
-    def add_step(self, name, script_name, input_file, output_file):
-        """Añade un paso de procesado"""
-        self.steps.append({
-            "name": name,
-            "script": script_name,
-            "input": input_file,
-            "output": output_file
-        })
-    
+
     def add_postgres_save(self):
-        """Marca que hay que guardar en PostgreSQL"""
         self.save_postgres = True
-    
+
     def generate(self):
-        """Genera el YAML del workflow"""
-        
+        # Parámetros base
+        parameters = [
+            {"name": "dataset-url", "value": self.dataset_url},
+            {"name": "dataset-file", "value": self.dataset_file},
+        ]
+
+        # Añadir cada script como parámetro b64
+        for i, step in enumerate(self.steps):
+            parameters.append({
+                "name": f"script-b64-{i+1}",
+                "value": step['script_b64']
+            })
+
         workflow = {
             "apiVersion": "argoproj.io/v1alpha1",
             "kind": "Workflow",
@@ -41,117 +36,110 @@ class WorkflowGenerator:
             "spec": {
                 "serviceAccountName": "argo-workflow-sa",
                 "entrypoint": "cascade",
-                "arguments": {
-                    "parameters": [
-                        {"name": "dataset-url", "value": self.dataset_url},
-                        {"name": "dataset-file", "value": self.dataset_file},
-                        {"name": "prep-script-b64", "value": self.prep_script_b64 or ""},
-                        {"name": "process-script-b64", "value": self.process_script_b64 or ""},
-                        {"name": "postproc-script-b64", "value": self.postproc_script_b64 or ""}
-                    ]
-                },
-                "volumeClaimTemplates": [
-                    {
-                        "metadata": {"name": "workdir"},
-                        "spec": {
-                            "accessModes": ["ReadWriteOnce"],
-                            "resources": {"requests": {"storage": "2Gi"}}
-                        }
+                "arguments": {"parameters": parameters},
+                "volumeClaimTemplates": [{
+                    "metadata": {"name": "workdir"},
+                    "spec": {
+                        "accessModes": ["ReadWriteOnce"],
+                        "resources": {"requests": {"storage": "2Gi"}}
                     }
-                ],
-                "volumes": [
-                    {
-                        "name": "scripts",
-                        "configMap": {"name": "cascade-scripts"}
-                    }
-                ],
+                }],
                 "templates": []
             }
         }
-        
-        # Template principal (orquestador)
+
+        # Template principal
         steps_list = []
-        
+
         # Paso de descarga
         steps_list.append([{
             "name": "download",
             "template": "download-step",
             "arguments": {
                 "parameters": [
-                    {"name": "url", "value": "{{workflow.parameters.dataset-url}}"}
+                    {"name": "url", "value": "{{workflow.parameters.dataset-url}}"},
+                    {"name": "filename", "value": "{{workflow.parameters.dataset-file}}"}
                 ]
             }
         }])
-        
-        # Pasos de procesado
-        for step in self.steps:
+
+        # Pasos dinámicos
+        prev_output = self.dataset_file
+        for i, step in enumerate(self.steps):
+            is_last = (i == len(self.steps) - 1)
+            output = "results.json" if is_last else f"output_{i+1}.csv"
             steps_list.append([{
-                "name": step["name"],
+                "name": step['name'],
                 "template": "python-step",
                 "arguments": {
                     "parameters": [
-                        {"name": "script", "value": step["script"]},
-                        {"name": "input", "value": step["input"]},
-                        {"name": "output", "value": step["output"]}
+                        {"name": "script-b64", "value": f"{{{{workflow.parameters.script-b64-{i+1}}}}}"},
+                        {"name": "script-name", "value": step['script_filename']},
+                        {"name": "input", "value": prev_output},
+                        {"name": "output", "value": output}
                     ]
                 }
             }])
-        
-        # Paso de guardar en PostgreSQL si está habilitado
+            prev_output = output
+
+        # Paso PostgreSQL
         if self.save_postgres:
             steps_list.append([{
                 "name": "save-to-postgres",
                 "template": "save-postgres-step"
             }])
-        
-        # Paso final de resumen
+
+        # Paso summary
         steps_list.append([{
             "name": "summary",
             "template": "show-summary"
         }])
-        
-        cascade_template = {
+
+        workflow["spec"]["templates"].append({
             "name": "cascade",
             "steps": steps_list
-        }
-        workflow["spec"]["templates"].append(cascade_template)
-        
+        })
+
         # Templates de ejecución
         workflow["spec"]["templates"].append(self._download_template())
         workflow["spec"]["templates"].append(self._python_template())
         if self.save_postgres:
             workflow["spec"]["templates"].append(self._postgres_template())
         workflow["spec"]["templates"].append(self._summary_template())
-        
+
         return yaml.dump(workflow, default_flow_style=False, sort_keys=False)
-    
+
     def _download_template(self):
         return {
             "name": "download-step",
             "inputs": {
-                "parameters": [{"name": "url"}]
+                "parameters": [
+                    {"name": "url"},
+                    {"name": "filename"}
+                ]
             },
             "container": {
                 "image": "curlimages/curl:latest",
                 "command": ["sh", "-c"],
                 "args": [
-                    "cd /workdir\n"
-                    "echo '📥 Descargando dataset...'\n"
-                    "curl -L -o fuel.zip '{{inputs.parameters.url}}'\n"
-                    "echo '📂 Extrayendo archivo...'\n"
-                    "unzip -o fuel.zip\n"
+                    "cd /workdir && "
+                    "echo '📥 Descargando dataset...' && "
+                    "curl -L -o dataset.zip '{{inputs.parameters.url}}' && "
+                    "echo '📂 Extrayendo...' && "
+                    "unzip -o dataset.zip && "
                     "ls -lh"
                 ],
                 "volumeMounts": [{"name": "workdir", "mountPath": "/workdir"}]
             }
         }
-    
+
     def _python_template(self):
         return {
             "name": "python-step",
             "inputs": {
                 "parameters": [
-                    {"name": "script"},
+                    {"name": "script-b64"},
+                    {"name": "script-name"},
                     {"name": "input"},
                     {"name": "output"}
                 ]
@@ -161,30 +149,16 @@ class WorkflowGenerator:
                 "command": ["sh", "-c"],
                 "args": [
                     "cd /workdir\n"
-                    "cat > /tmp/prep_b64.txt << 'BASE64END'\n"
-                    "{{workflow.parameters.prep-script-b64}}\n"
-                    "BASE64END\n"
-                    "cat > /tmp/process_b64.txt << 'BASE64END'\n"
-                    "{{workflow.parameters.process-script-b64}}\n"
-                    "BASE64END\n"
-                    "cat > /tmp/postproc_b64.txt << 'BASE64END'\n"
-                    "{{workflow.parameters.postproc-script-b64}}\n"
-                    "BASE64END\n"
-                    "base64 -d /tmp/prep_b64.txt > prep.py\n"
-                    "base64 -d /tmp/process_b64.txt > process.py\n"
-                    "base64 -d /tmp/postproc_b64.txt > postproc.py\n"
+                    "echo '{{inputs.parameters.script-b64}}' | base64 -d > {{inputs.parameters.script-name}}\n"
                     "pip install pandas numpy -q\n"
-                    "echo '⚙️  Ejecutando {{inputs.parameters.script}}...'\n"
-                    "python {{inputs.parameters.script}} --input {{inputs.parameters.input}} --output {{inputs.parameters.output}}\n"
-                    "echo '✓ {{inputs.parameters.script}} completado'"
+                    "echo '⚙️ Ejecutando {{inputs.parameters.script-name}}...'\n"
+                    "python {{inputs.parameters.script-name}} --input {{inputs.parameters.input}} --output {{inputs.parameters.output}}\n"
+                    "echo '✓ Completado'"
                 ],
-                "volumeMounts": [
-                    {"name": "workdir", "mountPath": "/workdir"},
-                    {"name": "scripts", "mountPath": "/scripts"}
-                ]
+                "volumeMounts": [{"name": "workdir", "mountPath": "/workdir"}]
             }
         }
-    
+
     def _postgres_template(self):
         return {
             "name": "save-postgres-step",
@@ -195,34 +169,36 @@ class WorkflowGenerator:
                     "cd /workdir\n"
                     "pip install psycopg2-binary -q\n"
                     "echo '💾 Guardando en PostgreSQL...'\n"
-                    "python /scripts/save-to-postgres.py --json-file results.json --db-host postgres-postgresql.postgres.svc.cluster.local --db-user cascade --db-password cascade123 --db-name cascade_db\n"
-                    "echo '✓ Datos guardados en PostgreSQL'"
-                ],
-                "volumeMounts": [
-                    {"name": "workdir", "mountPath": "/workdir"},
-                    {"name": "scripts", "mountPath": "/scripts"}
-                ]
-            }
-        }
-    
-    def _summary_template(self):
-        return {
-            "name": "show-summary",
-            "container": {
-                "image": "alpine:latest",
-                "command": ["sh", "-c"],
-                "args": [
-                    "echo '==========================================' && "
-                    "echo '✓ PIPELINE CASCADE COMPLETADO' && "
-                    "echo '==========================================' && "
-                    "echo 'Pasos ejecutados:' && "
-                    "echo '  1. ✓ Descarga de dataset' && "
-                    "echo '  2. ✓ Preparación de datos' && "
-                    "echo '  3. ✓ Procesamiento' && "
-                    "echo '  4. ✓ Postprocesamiento' && "
-                    "echo '  5. ✓ Guardado en PostgreSQL' && "
-                    "echo '==========================================' "
+                    "python -c \"\n"
+                    "import json, psycopg2\n"
+                    "conn = psycopg2.connect(host='postgres-postgresql.postgres.svc.cluster.local', user='cascade', password='cascade123', database='cascade_db')\n"
+                    "cur = conn.cursor()\n"
+                    "cur.execute('CREATE TABLE IF NOT EXISTS pipeline_results (id SERIAL PRIMARY KEY, timestamp TIMESTAMP DEFAULT NOW(), data JSONB)')\n"
+                    "data = open('results.json').read()\n"
+                    "cur.execute('INSERT INTO pipeline_results (data) VALUES (%s)', (data,))\n"
+                    "conn.commit()\n"
+                    "print('✓ Guardado en PostgreSQL')\n"
+                    "\""
                 ],
                 "volumeMounts": [{"name": "workdir", "mountPath": "/workdir"}]
             }
         }
+
+    def _summary_template(self):
+    	num_steps = len(self.steps)
+    	return {
+        	"name": "show-summary",
+        	"container": {
+            		"image": "alpine:latest",
+            		"command": ["sh", "-c"],
+            		"args": [
+                		f"echo '===========================================' && "
+                		f"echo '✓ PIPELINE CASCADE COMPLETADO' && "
+                		f"echo '===========================================' && "
+                		f"echo 'Pasos ejecutados: {num_steps}' && "
+               			 f"echo '==========================================='",
+            		],
+            		"volumeMounts": [{"name": "workdir", "mountPath": "/workdir"}]
+        }
+    }
+
