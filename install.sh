@@ -17,10 +17,10 @@ export KUBECONFIG=~/.kube/config
 # 1. Install ArgoCD
 info "Installing ArgoCD..."
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml || true
 
 info "Waiting for ArgoCD to be ready..."
-kubectl wait --for=condition=Ready pods --all -n argocd --timeout=180s
+kubectl wait --for=condition=Ready pods -l app.kubernetes.io/name=argocd-server -n argocd --timeout=180s
 log "ArgoCD installed"
 
 # 2. Expose ArgoCD on NodePort 30900
