@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/roberbravo/cascade
-    targetRevision: HEAD
+    targetRevision: master
     path: k3s/pipeline-builder
   destination:
     server: https://kubernetes.default.svc

@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/roberbravo/cascade
-    targetRevision: app-of-apps
+    targetRevision: master
     path: k3s/argocd/apps
   destination:
     server: https://kubernetes.default.svc
