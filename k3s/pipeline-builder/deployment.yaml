@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pipeline-builder
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipeline-builder-sa
+  namespace: pipeline-builder
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pipeline-builder-role
+rules:
+- apiGroups: ["argoproj.io"]
+  resources: ["workflows"]
+  verbs: ["create", "get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["pods", "pods/logs"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pipeline-builder-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pipeline-builder-role
+subjects:
+- kind: ServiceAccount
+  name: pipeline-builder-sa
+  namespace: pipeline-builder
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pipeline-builder
+  namespace: pipeline-builder
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pipeline-builder
+  template:
+    metadata:
+      labels:
+        app: pipeline-builder
+    spec:
+      serviceAccountName: pipeline-builder-sa
+      containers:
+      - name: pipeline-builder
+        image: robertobravounir/cascade-pipeline-builder:latest
+        ports:
+        - containerPort: 8888
+        env:
+        - name: KUBECONFIG
+          value: ""
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pipeline-builder
+  namespace: pipeline-builder
+spec:
+  type: NodePort
+  selector:
+    app: pipeline-builder
+  ports:
+  - port: 8888
+    targetPort: 8888
+    nodePort: 30888
