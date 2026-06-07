@@ -20,3 +20,19 @@ service:
   type: NodePort
   port: 3000
   nodePort: 30300
+dashboardProviders:
+  dashboardproviders.yaml:
+    apiVersion: 1
+    providers:
+    - name: cascade
+      orgId: 1
+      folder: Cascade
+      type: file
+      disableDeletion: false
+      editable: true
+      options:
+        path: /var/lib/grafana/dashboards/cascade
+dashboards:
+  cascade:
+    pipeline-results:
+      file: dashboards/pipeline-results.json

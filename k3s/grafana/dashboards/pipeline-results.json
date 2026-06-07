@@ -1,0 +1,197 @@
+{
+  "title": "Cascade - Pipeline Results",
+  "tags": [
+    "cascade",
+    "tfm"
+  ],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "title": "Precio Medio Global ($/barril)",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT 1 as time, (data->'summary'->'global_statistics'->>'avg_price')::float as \"Precio Medio\" FROM pipeline_results ORDER BY id DESC LIMIT 1",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "title": "Precio Máximo Histórico ($/barril)",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT 1 as time, (data->'summary'->'global_statistics'->>'max_price')::float as \"Precio Máximo\" FROM pipeline_results ORDER BY id DESC LIMIT 1",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "title": "Precio Mínimo Histórico ($/barril)",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT 1 as time, (data->'summary'->'global_statistics'->>'min_price')::float as \"Precio Mínimo\" FROM pipeline_results ORDER BY id DESC LIMIT 1",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "title": "Media Móvil 12m ($/barril)",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT 1 as time, (data->'summary'->'current_trend'->>'ma_12m')::float as \"MA 12m\" FROM pipeline_results ORDER BY id DESC LIMIT 1",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "background"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "decimals": 2,
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        }
+      }
+    },
+    {
+      "id": 5,
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "title": "Evolución Precio Petróleo por Año (1970-2026)",
+      "type": "timeseries",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT (value->>'year')::int * interval '1 year' + '1970-01-01'::date as time, (value->>'avg_price')::float as \"Precio Medio\", (value->>'max_price')::float as \"Precio Máximo\", (value->>'min_price')::float as \"Precio Mínimo\" FROM pipeline_results, jsonb_array_elements(data->'yearly_data') as value ORDER BY time",
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "title": "Anomalías Detectadas (Z-Score > 2.5)",
+      "type": "table",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT value->>'Date' as \"Fecha\", (value->>'Crude_Oil_Price')::float as \"Precio ($/barril)\", (value->>'Z_Score')::float as \"Z-Score\" FROM pipeline_results, jsonb_array_elements(data->'anomalies') as value ORDER BY (value->>'Crude_Oil_Price')::float DESC",
+          "format": "table"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 36,
+  "version": 0
+}
