@@ -11,7 +11,7 @@ spec:
     targetRevision: 6.57.4
     helm:
       valueFiles:
-        - https://raw.githubusercontent.com/roberbravo/cascade/app-of-apps/k3s/grafana/values.yaml
+        - https://raw.githubusercontent.com/roberbravo/cascade/master/k3s/grafana/values.yaml
   destination:
     server: https://kubernetes.default.svc
     namespace: grafana
