@@ -38,6 +38,16 @@ info "Applying App of Apps..."
 kubectl apply -f https://raw.githubusercontent.com/roberbravo/cascade/master/k3s/argocd/root-app.yaml
 log "App of Apps applied - ArgoCD will deploy the full stack"
 
+# 5. Create Argo Workflow Service Account
+info "Creating Argo Workflow Service Account..."
+kubectl create namespace argo --dry-run=client -o yaml | kubectl apply -f -
+kubectl create serviceaccount argo-workflow-sa -n argo --dry-run=client -o yaml | kubectl apply -f -
+kubectl create clusterrolebinding argo-workflow-sa-binding \
+  --clusterrole=cluster-admin \
+  --serviceaccount=argo:argo-workflow-sa \
+  --dry-run=client -o yaml | kubectl apply -f -
+log "Argo Workflow Service Account ready"
+
 echo ""
 echo "================================================"
 echo "  Installation Completed"
