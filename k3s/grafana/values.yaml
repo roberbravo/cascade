@@ -1,9 +1,7 @@
 adminPassword: cascade123
-
 persistence:
   enabled: true
   size: 2Gi
-
 datasources:
   datasources.yaml:
     apiVersion: 1
@@ -18,7 +16,7 @@ datasources:
         password: cascade123
       isDefault: true
       editable: true
-
 service:
-  type: ClusterIP
+  type: NodePort
   port: 3000
+  nodePort: 30300

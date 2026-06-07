@@ -10,8 +10,21 @@ spec:
     chart: argo-workflows
     targetRevision: 0.45.3
     helm:
-      valueFiles:
-        - https://raw.githubusercontent.com/roberbravo/master/app-of-apps/k3s/argo/values.yaml
+      values: |
+        server:
+          serviceType: NodePort
+          serviceNodePort: 30800
+          secure: false
+          authModes:
+            - server
+        persistence:
+          enabled: true
+          size: 10Gi
+        controller:
+          workflowNamespaces:
+            - argo
+        images:
+          tag: v4.0.3
   destination:
     server: https://kubernetes.default.svc
     namespace: argo
